@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#07111f" />
+    <meta
+      name="description"
+      content="Centro de control para supervisar 310 buses, anticipar agrupamientos y operar aun sin conexión."
+    />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307111f'/%3E%3Cpath d='M15 40h34M19 40V22c0-5 4-8 13-8s13 3 13 8v18M23 27h18M24 47h.1M40 47h.1' stroke='%2338d8c4' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <title>Control de Frecuencia · Centro de Operaciones</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand" aria-label="Centro de control de flota">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" role="img">
+              <path d="M7 21h18M9 21V11c0-3 2.5-5 7-5s7 2 7 5v10M11 14h10M11 25h.1M21 25h.1" />
+            </svg>
+          </div>
+          <div>
+            <span class="eyebrow">FLOTA URBANA</span>
+            <strong>Centro de control</strong>
+          </div>
+        </div>
+
+        <div class="topbar-status">
+          <span class="connection-pill" id="connectionPill">
+            <span class="status-dot"></span>
+            <span id="connectionLabel">Conectando</span>
+          </span>
+          <span class="clock" id="clock">--:--:--</span>
+          <button class="icon-button mobile-only" id="openSupervisor" aria-label="Abrir panel del supervisor">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="left-rail" aria-label="Resumen de operación">
+          <section class="rail-section status-overview">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">OPERACIÓN</span>
+                <h2>Estado de la flota</h2>
+              </div>
+              <span class="live-tag"><span></span> EN VIVO</span>
+            </div>
+
+            <div class="metric-grid">
+              <article class="metric-card metric-primary">
+                <span>Buses activos</span>
+                <strong id="activeBuses">273</strong>
+                <small>de 310 unidades</small>
+              </article>
+              <article class="metric-card">
+                <span>Rutas</span>
+                <strong id="activeRoutes">22</strong>
+                <small>todas operando</small>
+              </article>
+              <article class="metric-card metric-warning">
+                <span>En riesgo</span>
+                <strong id="riskCount">0</strong>
+                <small>agrupamientos</small>
+              </article>
+              <article class="metric-card metric-danger">
+                <span>Huecos</span>
+                <strong id="gapCount">0</strong>
+                <small>sobre 160%</small>
+              </article>
+            </div>
+          </section>
+
+          <section class="rail-section route-section">
+            <div class="section-heading compact">
+              <h2>Rutas</h2>
+              <span id="routeSummary">22 visibles</span>
+            </div>
+            <label class="field-label" for="routeSelect">Filtrar recorrido</label>
+            <select id="routeSelect" class="select-control">
+              <option value="all">Todas las rutas</option>
+            </select>
+            <div class="route-health" id="routeHealth" aria-live="polite"></div>
+          </section>
+
+          <section class="rail-section system-section">
+            <div class="section-heading compact">
+              <h2>Sistema</h2>
+              <span id="workerState">Iniciando</span>
+            </div>
+            <dl class="system-list">
+              <div><dt>Mensajes GPS</dt><dd><span id="messageRate">0</span>/s</dd></div>
+              <div><dt>Renderizado</dt><dd><span id="fps">0</span> fps</dd></div>
+              <div><dt>Interacción</dt><dd><span id="inp">0</span> ms</dd></div>
+              <div><dt>Coincidencia vial</dt><dd id="mapMatchScore">—</dd></div>
+            </dl>
+            <button class="secondary-button full-width" id="openDiagnostics">Ver diagnóstico técnico</button>
+          </section>
+        </aside>
+
+        <section class="map-panel" aria-label="Mapa operacional de la flota">
+          <div class="map-toolbar">
+            <div class="map-title">
+              <span class="eyebrow">POSICIÓN OPERACIONAL</span>
+              <h1>Red urbana en tiempo real</h1>
+            </div>
+            <div class="toolbar-actions">
+              <button class="secondary-button" id="togglePause">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14" /></svg>
+                <span>Pausar</span>
+              </button>
+              <button class="accent-button" id="forceBunching">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3Zm0 6v5m0 3h.01" /></svg>
+                Forzar agrupamiento
+              </button>
+            </div>
+          </div>
+
+          <div class="map-stage" id="mapStage">
+            <canvas id="fleetMap" aria-label="Mapa con 310 buses y 22 rutas"></canvas>
+            <div class="map-status-card" id="selectedBusCard" hidden>
+              <button class="close-mini" id="closeBusCard" aria-label="Cerrar detalle">×</button>
+              <span class="eyebrow">UNIDAD SELECCIONADA</span>
+              <strong id="selectedBusId">Bus 000</strong>
+              <div><span>Ruta</span><b id="selectedBusRoute">R-00</b></div>
+              <div><span>Velocidad</span><b id="selectedBusSpeed">0 km/h</b></div>
+              <div><span>Posición</span><b id="selectedBusProgress">0 m</b></div>
+            </div>
+            <div class="map-legend" aria-label="Leyenda del mapa">
+              <span><i class="legend-bus normal"></i> Regular</span>
+              <span><i class="legend-bus warning"></i> Riesgo</span>
+              <span><i class="legend-bus offline"></i> Sin señal</span>
+            </div>
+            <div class="map-controls" aria-label="Controles del mapa">
+              <button id="zoomIn" aria-label="Acercar">+</button>
+              <button id="zoomOut" aria-label="Alejar">−</button>
+              <button id="resetView" aria-label="Restablecer vista">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M20 20v-6h-6M5.5 15a7 7 0 0 0 11.7 2.5L20 14M4 10l2.8-3.5A7 7 0 0 1 18.5 9" /></svg>
+              </button>
+            </div>
+            <div class="loading-layer" id="loadingLayer">
+              <div class="pulse-map"></div>
+              <strong>Preparando la red urbana</strong>
+              <span>Construyendo el índice espacial y ubicando la flota…</span>
+            </div>
+          </div>
+
+          <div class="timeline-panel">
+            <div class="timeline-copy">
+              <span class="eyebrow">REPRODUCCIÓN LOCAL</span>
+              <strong id="timelineLabel">Ahora</strong>
+            </div>
+            <input
+              id="timeline"
+              type="range"
+              min="-120"
+              max="0"
+              value="0"
+              step="1"
+              aria-label="Retroceder hasta dos horas"
+            />
+            <div class="timeline-scale"><span>−2 h</span><span>−1 h</span><span>Ahora</span></div>
+          </div>
+        </section>
+
+        <aside class="right-rail" aria-label="Alertas y recomendaciones">
+          <section class="alerts-header">
+            <div>
+              <span class="eyebrow">DECISIONES</span>
+              <h2>Alertas activas</h2>
+            </div>
+            <span class="alert-total" id="alertTotal">0</span>
+          </section>
+          <div class="alert-filters" role="group" aria-label="Filtro de alertas">
+            <button class="filter-chip active" data-filter="all">Todas</button>
+            <button class="filter-chip" data-filter="bunching">Agrupamiento</button>
+            <button class="filter-chip" data-filter="gap">Huecos</button>
+          </div>
+          <div class="alert-list" id="alertList" aria-live="polite">
+            <div class="empty-alerts">
+              <span class="empty-icon">✓</span>
+              <strong>Analizando intervalos</strong>
+              <p>Las recomendaciones aparecerán al detectar un riesgo.</p>
+            </div>
+          </div>
+          <div class="supervisor-card">
+            <div>
+              <span class="eyebrow">SUPERVISOR DE VÍA</span>
+              <strong>Registro sin conexión</strong>
+              <small><span id="pendingActions">0</span> acciones pendientes</small>
+            </div>
+            <button class="secondary-button" id="openSupervisorDesktop">Registrar</button>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <dialog id="supervisorDialog" class="app-dialog">
+      <form method="dialog" class="dialog-card" id="supervisorForm">
+        <div class="dialog-header">
+          <div>
+            <span class="eyebrow">MODO SUPERVISOR</span>
+            <h2>Registrar acción en vía</h2>
+          </div>
+          <button class="dialog-close" value="cancel" aria-label="Cerrar">×</button>
+        </div>
+        <p class="dialog-intro">El registro queda guardado en este dispositivo y se sincroniza al recuperar la conexión.</p>
+        <label>
+          Tipo de acción
+          <select id="actionType" required>
+            <option value="retention">Retención aplicada</option>
+            <option value="empty">Bus en vacío</option>
+            <option value="incident">Incidente</option>
+          </select>
+        </label>
+        <div class="dialog-grid">
+          <label>Bus <input id="actionBus" type="number" min="1" max="310" value="1" required /></label>
+          <label>Ruta <select id="actionRoute" required></select></label>
+        </div>
+        <label>
+          Observación
+          <textarea id="actionNote" rows="3" maxlength="180" placeholder="Ej.: retención de 2 minutos confirmada"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">Cancelar</button>
+          <button class="accent-button" id="saveAction" value="default">Guardar acción</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="diagnosticsDialog" class="app-dialog diagnostics-dialog">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div>
+            <span class="eyebrow">VERIFICACIÓN</span>
+            <h2>Diagnóstico técnico</h2>
+          </div>
+          <button class="dialog-close" id="closeDiagnostics" aria-label="Cerrar">×</button>
+        </div>
+        <div class="diagnostic-grid">
+          <article><span>Hilo principal</span><strong id="diagMainThread">Libre</strong><small>La geometría corre fuera de la interfaz.</small></article>
+          <article><span>Memoria compartida</span><strong id="diagSharedMemory">Comprobando</strong><small>Doble búfer versionado con Atomics.</small></article>
+          <article><span>Prueba calles paralelas</span><strong id="diagSwitches">—</strong><small>Cambios falsos tras aplicar memoria de secuencia.</small></article>
+          <article><span>Long tasks</span><strong id="diagLongTasks">0</strong><small>Tareas de más de 50 ms observadas.</small></article>
+        </div>
+        <div class="architecture-flow" aria-label="Flujo de procesamiento">
+          <span>GPS ruidoso</span><i>→</i><span>Índice espacial</span><i>→</i><span>Asignación secuencial</span><i>→</i><span>Intervalos</span><i>→</i><span>Alerta</span>
+        </div>
+        <p class="dialog-intro">El mapa usa Canvas y requestAnimationFrame. Los mensajes de control y métricas viajan por postMessage; el estado completo de la flota permanece en memoria compartida.</p>
+      </div>
+    </dialog>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

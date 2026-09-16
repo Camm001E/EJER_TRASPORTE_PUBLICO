@@ -1,0 +1,9 @@
+{
+  "name": "Control de Frecuencia del Transporte",
+  "short_name": "Control Flota",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "description": "Supervisión de 310 buses y detección temprana de agrupamientos."
+}
