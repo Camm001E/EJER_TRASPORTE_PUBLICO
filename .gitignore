@@ -1,0 +1,5 @@
+.sites-runtime/
+.openai/
+.vercel/
+*.tar.gz
+*.zip
